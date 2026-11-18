@@ -240,10 +240,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
         <div className="mt-16 pt-10 border-t border-slate-50 text-center">
            <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em] mb-4">Powered by ShopEase Grid Technology</p>
-           <div className="flex items-center justify-center space-x-6 opacity-30 grayscale">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg" className="h-4" alt="Stripe" />
-              <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_HiRes_Logo.png" className="h-4" alt="Google" />
-              <img src="https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg" className="h-4" alt="Meta" />
+           <div className="flex items-center justify-center space-x-6 text-[10px] font-black uppercase tracking-widest text-slate-300">
+              <span>Encrypted Session</span>
+              <span>•</span>
+              <span>Google Ready</span>
+              <span>•</span>
+              <span>Meta Ready</span>
            </div>
         </div>
       </div>
@@ -284,10 +286,10 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   );
 };
 
-const DiagnosticBadge: React.FC<{ icon: React.ReactNode, label: string, status?: boolean }> = ({ icon, label, status }) => (
+const DiagnosticBadge: React.FC<{ icon: React.ReactElement<{ className?: string }>, label: string, status?: boolean }> = ({ icon, label, status }) => (
   <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
     <div className={`${status ? 'text-green-500' : 'text-amber-500'} scale-75`}>
-      {React.cloneElement(icon as React.ReactElement, { className: "w-4 h-4" })}
+      {React.cloneElement(icon, { className: "w-4 h-4" })}
     </div>
     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{label}</span>
   </div>

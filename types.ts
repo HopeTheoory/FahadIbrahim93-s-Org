@@ -46,6 +46,13 @@ export interface LinkedAccounts {
   google: boolean;
 }
 
+export interface NotificationSettings {
+  lowStockAlerts: boolean;
+  lowStockThreshold: number;
+  newOrderAlerts: boolean;
+  marketingEmails: boolean;
+}
+
 export interface User {
   name: string;
   email: string;
@@ -56,6 +63,7 @@ export interface User {
   bio?: string;
   phone?: string;
   linkedAccounts: LinkedAccounts;
+  notificationSettings: NotificationSettings;
 }
 
 export interface SocialMediaCaptions {

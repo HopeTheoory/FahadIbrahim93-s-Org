@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Package, ShoppingBag, PlusCircle, LogOut, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LayoutDashboard, Package, ShoppingBag, PlusCircle, LogOut, Settings, RefreshCw } from 'lucide-react';
 import Dashboard from './views/Dashboard';
 import CreatePost from './views/CreatePost';
 import Inventory from './views/Inventory';
@@ -9,6 +9,7 @@ import Login from './views/Login';
 import Profile from './views/Profile';
 import { Product, Order, Activity, OrderStatus, Platform, User } from './types';
 import { authService } from './services/authService';
+import { storageService } from './services/storageService';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -16,117 +17,156 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'dashboard' | 'post' | 'inventory' | 'orders' | 'profile'>('dashboard');
   const [loading, setLoading] = useState(true);
   
-  // High-fidelity Product Catalog for BD Market
-  const [products, setProducts] = useState<Product[]>([
-    { id: 'p1', name: 'Jamdani Silk Saree', stock: 8, price: 5500, buyingCost: 3200, image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p2', name: 'Hand-painted Panjabi', stock: 15, price: 2200, buyingCost: 1100, image: 'https://images.unsplash.com/photo-1597983073493-88cd35cf93b0?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p3', name: 'Oxidized Choker Set', stock: 42, price: 850, buyingCost: 350, image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p4', name: 'Clay Wall Hanging', stock: 5, price: 1200, buyingCost: 500, image: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p5', name: 'Designer Georgette Hijab', stock: 60, price: 650, buyingCost: 280, image: 'https://images.unsplash.com/photo-1584370848010-d7fe6bc767ec?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p6', name: 'Block Print Kurti', stock: 12, price: 1800, buyingCost: 950, image: 'https://images.unsplash.com/photo-1609357483233-5a869d622158?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p7', name: 'Traditional Clay Pot', stock: 3, price: 450, buyingCost: 150, image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p8', name: 'Sandalwood Soap Pack', stock: 25, price: 350, buyingCost: 120, image: 'https://images.unsplash.com/photo-1600857062241-98e5dba7f214?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p9', name: 'Wooden Photo Frame', stock: 18, price: 1100, buyingCost: 400, image: 'https://images.unsplash.com/photo-1544000323-2882193e433a?auto=format&fit=crop&q=80&w=400' },
-    { id: 'p10', name: 'Crochet Table Runner', stock: 7, price: 1500, buyingCost: 700, image: 'https://images.unsplash.com/photo-1520970014086-2208d477c812?auto=format&fit=crop&q=80&w=400' },
-  ]);
+  // State variables with hydration defaults
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
-  // Historical 2-Month Order Dataset (50 Orders)
-  const generateOrders = (): Order[] => {
-    const today = new Date();
+  // Initialization Logic
+  useEffect(() => {
+    const initializeData = async () => {
+      setLoading(true);
+
+      // 1. Check Auth Status
+      authService.onAuthUpdate((sessionUser) => {
+        if (sessionUser) {
+          setUser({
+            name: sessionUser.displayName,
+            email: sessionUser.email,
+            isAuthenticated: true,
+            shopName: sessionUser.displayName,
+            location: 'Dhaka, Bangladesh',
+            avatar: sessionUser.photoURL,
+            linkedAccounts: sessionUser.linkedAccounts || {
+              facebook: true,
+              instagram: true,
+              tiktok: false,
+              google: true
+            },
+            notificationSettings: sessionUser.notificationSettings || {
+              lowStockAlerts: true,
+              lowStockThreshold: 5,
+              newOrderAlerts: true,
+              marketingEmails: false
+            }
+          });
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      });
+
+      // 2. Hydrate or Seed Data
+      const storedProducts = storageService.getProducts();
+      const storedOrders = storageService.getOrders();
+      const storedActivities = storageService.getActivities();
+
+      if (storageService.isInitialized() && storedProducts && storedOrders) {
+        setProducts(storedProducts);
+        setOrders(storedOrders);
+        setActivities(storedActivities || []);
+      } else {
+        // First Time Seeding Logic
+        const initialProducts: Product[] = [
+          { id: 'p1', name: 'Jamdani Silk Saree', stock: 8, price: 5500, buyingCost: 3200, image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p2', name: 'Hand-painted Panjabi', stock: 15, price: 2200, buyingCost: 1100, image: 'https://images.unsplash.com/photo-1597983073493-88cd35cf93b0?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p3', name: 'Oxidized Choker Set', stock: 42, price: 850, buyingCost: 350, image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p4', name: 'Clay Wall Hanging', stock: 5, price: 1200, buyingCost: 500, image: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p5', name: 'Designer Georgette Hijab', stock: 60, price: 650, buyingCost: 280, image: 'https://images.unsplash.com/photo-1584370848010-d7fe6bc767ec?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p6', name: 'Block Print Kurti', stock: 12, price: 1800, buyingCost: 950, image: 'https://images.unsplash.com/photo-1609357483233-5a869d622158?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p7', name: 'Traditional Clay Pot', stock: 3, price: 450, buyingCost: 150, image: 'https://images.unsplash.com/photo-1610701596007-11502861dcfa?auto=format&fit=crop&q=80&w=400' },
+          { id: 'p8', name: 'Sandalwood Soap Pack', stock: 25, price: 350, buyingCost: 120, image: 'https://images.unsplash.com/photo-1600857062241-98e5dba7f214?auto=format&fit=crop&q=80&w=400' },
+        ];
+
+        const seededOrders = generateHistoricalSeed(initialProducts);
+        const initialActivities: Activity[] = [
+          { id: 'a1', type: 'order', message: 'ShopEase system initialized successfully', timestamp: 'Day 1' },
+          { id: 'a2', type: 'inventory', message: 'Initial product catalog indexed', timestamp: 'Day 1' },
+        ];
+
+        setProducts(initialProducts);
+        setOrders(seededOrders);
+        setActivities(initialActivities);
+
+        storageService.saveProducts(initialProducts);
+        storageService.saveOrders(seededOrders);
+        storageService.saveActivities(initialActivities);
+        storageService.setInitialized();
+      }
+
+      setLoading(false);
+    };
+
+    initializeData();
+  }, []);
+
+  // Automatic Persistence Hooks
+  useEffect(() => { if (!loading) storageService.saveProducts(products); }, [products]);
+  useEffect(() => { if (!loading) storageService.saveOrders(orders); }, [orders]);
+  useEffect(() => { if (!loading) storageService.saveActivities(activities); }, [activities]);
+
+  const generateHistoricalSeed = (catalog: Product[]): Order[] => {
     const data: Order[] = [];
     const platforms = [Platform.FACEBOOK, Platform.INSTAGRAM, Platform.TIKTOK];
-    const statuses = [OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.SHIPPED];
-    const names = ['Sara Islam', 'Anik Rahman', 'Maher Afroz', 'Riad Hassan', 'Nila Ahmed', 'Tarek Aziz', 'Farhana Akter', 'Sohail Rana', 'Laila Khan', 'Zeeshan Khan'];
+    const customers = ['Sara Islam', 'Anik Rahman', 'Nila Ahmed', 'Tarek Aziz', 'Laila Khan', 'Tanvir Ahmed'];
+    const today = new Date();
     
-    // Seed with 50 orders over 60 days
-    for (let i = 0; i < 50; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() - (i % 60)); // Spread across 60 days
-      const dateStr = date.toISOString().split('T')[0];
+    for (let i = 0; i < 85; i++) {
+      const dayOffset = Math.floor(Math.random() * 60);
+      const orderDate = new Date();
+      orderDate.setDate(today.getDate() - dayOffset);
+      const product = catalog[Math.floor(Math.random() * catalog.length)];
+      const qty = Math.floor(Math.random() * 2) + 1;
       
-      const productIndex = i % products.length;
-      const product = products[productIndex];
-      const qty = (i % 3) + 1;
-      
+      let status: OrderStatus = OrderStatus.SHIPPED;
+      if (dayOffset <= 2) status = Math.random() > 0.5 ? OrderStatus.PENDING : OrderStatus.PAID;
+      else if (dayOffset <= 7) status = Math.random() > 0.2 ? OrderStatus.PAID : OrderStatus.SHIPPED;
+
       data.push({
-        id: (1000 + i).toString(),
-        platform: platforms[i % 3],
-        customerName: names[i % names.length],
+        id: (3000 + i).toString(),
+        platform: platforms[Math.floor(Math.random() * platforms.length)],
+        customerName: customers[Math.floor(Math.random() * customers.length)],
         productName: product.name,
         quantity: qty,
         totalPrice: product.price * qty,
-        buyingCost: product.buyingCost,
-        status: i < 5 ? OrderStatus.PENDING : i < 15 ? OrderStatus.PAID : OrderStatus.SHIPPED,
-        date: dateStr
+        buyingCost: product.buyingCost, // Critical: Anchors cost at time of sale
+        status: status,
+        date: orderDate.toISOString().split('T')[0]
       });
     }
-    return data;
+    return data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  const [orders, setOrders] = useState<Order[]>(generateOrders());
-
-  const [activities, setActivities] = useState<Activity[]>([
-    { id: 'a1', type: 'order', message: 'New order #1049 received from TikTok', timestamp: 'Just now' },
-    { id: 'a2', type: 'post', message: 'Campaign "Eid Collection" launched on Meta', timestamp: '1 hour ago' },
-    { id: 'a3', type: 'inventory', message: 'Stock for "Traditional Clay Pot" is critically low (3 left)', timestamp: '3 hours ago' },
-    { id: 'a4', type: 'order', message: 'Payment verified for Order #1045', timestamp: '5 hours ago' },
-    { id: 'a5', type: 'order', message: 'Sara Islam ordered 2 units of Jamdani Silk Saree', timestamp: 'Yesterday' },
-    { id: 'a6', type: 'inventory', message: 'Added 60 units of Designer Georgette Hijab', timestamp: '2 days ago' },
-  ]);
-
-  useEffect(() => {
-    const unsubscribe = authService.onAuthUpdate((sessionUser) => {
-      if (sessionUser) {
-        setUser({
-          name: sessionUser.displayName,
-          email: sessionUser.email,
-          isAuthenticated: true,
-          shopName: sessionUser.displayName,
-          location: 'Dhaka, Bangladesh',
-          avatar: sessionUser.photoURL,
-          linkedAccounts: sessionUser.linkedAccounts || {
-            facebook: true,
-            instagram: true,
-            tiktok: false,
-            google: true
-          }
-        });
-        setIsAuthenticated(true);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
   const handleLoginSuccess = (data: any) => {
-    setUser({
+    const newUser: User = {
       name: data.shopName,
       email: data.email,
       isAuthenticated: true,
       shopName: data.shopName,
       location: data.location,
       avatar: data.avatar,
-      linkedAccounts: data.linkedAccounts
-    });
+      linkedAccounts: data.linkedAccounts,
+      notificationSettings: {
+        lowStockAlerts: true,
+        lowStockThreshold: 5,
+        newOrderAlerts: true,
+        marketingEmails: false
+      }
+    };
+    setUser(newUser);
     setIsAuthenticated(true);
+    addActivity(`New login from ${data.providerId || 'Social Auth'}`, 'inventory');
   };
 
   const handleLogout = async () => {
-    try {
-      await authService.signOut();
-      setIsAuthenticated(false);
-      setUser(null);
-    } catch (e) {
-      console.error("Logout failed", e);
-    }
+    await authService.signOut();
+    setIsAuthenticated(false);
+    setUser(null);
   };
 
   const addActivity = (message: string, type: Activity['type']) => {
-    setActivities(prev => [{ id: Date.now().toString(), type, message, timestamp: 'Just now' }, ...prev]);
+    setActivities(prev => [{ id: Date.now().toString(), type, message, timestamp: 'Just now' }, ...prev].slice(0, 50));
   };
 
   const updateProductStock = (id: string, delta: number) => {
@@ -134,33 +174,29 @@ const App: React.FC = () => {
   };
 
   const updateOrderStatus = (id: string, newStatus: OrderStatus) => {
-    setOrders(prev => {
-      const updated = prev.map(o => {
-        if (o.id === id) {
-          if (newStatus === OrderStatus.PAID && o.status !== OrderStatus.PAID) {
-            const product = products.find(p => p.name.toLowerCase().includes(o.productName.toLowerCase()));
-            if (product) updateProductStock(product.id, -o.quantity);
-          }
-          return { ...o, status: newStatus };
-        }
-        return o;
-      });
-      return updated;
-    });
-    addActivity(`Order #${id} marked as ${newStatus}`, 'order');
+    const targetOrder = orders.find(o => o.id === id);
+    if (!targetOrder) return;
+
+    if (newStatus === OrderStatus.PAID && targetOrder.status !== OrderStatus.PAID) {
+      const product = products.find(p => p.name.toLowerCase() === targetOrder.productName.toLowerCase());
+      if (product) updateProductStock(product.id, -targetOrder.quantity);
+    }
+
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    addActivity(`Order #${id} status: ${newStatus}`, 'order');
   };
 
   const handleUpdateOrderPrice = (id: string, newPrice: number) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, totalPrice: newPrice } : o));
-    addActivity(`Custom price updated for order #${id}`, 'order');
+    addActivity(`Adjusted pricing for order #${id}`, 'order');
   };
 
   if (loading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-slate-600 font-bold uppercase tracking-widest text-[10px]">Verifying Identity Gateway...</p>
+          <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mb-4" />
+          <p className="text-slate-400 font-black tracking-widest text-[10px] uppercase">Syncing Local Assets...</p>
         </div>
       </div>
     );
@@ -177,7 +213,7 @@ const App: React.FC = () => {
           </h1>
           <div className="mt-2 flex items-center">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse mr-2"></div>
-            <p className="text-[10px] text-slate-400 font-black tracking-[0.2em] uppercase">Enterprise Live</p>
+            <p className="text-[10px] text-slate-400 font-black tracking-[0.2em] uppercase">Cloud Persisted</p>
           </div>
         </div>
 
@@ -193,13 +229,9 @@ const App: React.FC = () => {
 
         <div className="p-8">
           <div className="p-5 mb-4 rounded-[32px] bg-slate-50 border border-slate-100 flex items-center">
-            {user?.avatar ? (
-              <img src={user.avatar} className="w-12 h-12 rounded-2xl shadow-lg" alt="User" />
-            ) : (
-              <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-100">
-                {user?.shopName?.charAt(0) || 'S'}
-              </div>
-            )}
+            <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-100 overflow-hidden">
+              {user?.avatar ? <img src={user.avatar} alt={user.shopName || 'Shop avatar'} className="w-full h-full object-cover" /> : user?.shopName?.charAt(0) || 'S'}
+            </div>
             <div className="ml-4 overflow-hidden">
               <p className="text-sm font-black text-slate-900 truncate">{user?.shopName || 'My Shop'}</p>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Store Admin</p>
@@ -214,10 +246,10 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-y-auto p-12 bg-[#F8FAFC]">
         <div className="max-w-7xl mx-auto">
           {currentView === 'dashboard' && <Dashboard products={products} orders={orders} activities={activities} onNavigate={setCurrentView} user={user} />}
-          {currentView === 'post' && <CreatePost onPostSuccess={() => { addActivity('Multi-channel campaign launched', 'post'); setCurrentView('dashboard'); }} shopName={user?.shopName} />}
+          {currentView === 'post' && <CreatePost onPostSuccess={() => { addActivity('Campaign Broadcast Active', 'post'); setCurrentView('dashboard'); }} shopName={user?.shopName} />}
           {currentView === 'inventory' && <Inventory products={products} setProducts={setProducts} onActivity={addActivity} />}
           {currentView === 'orders' && <Orders orders={orders} onUpdateStatus={updateOrderStatus} onUpdatePrice={handleUpdateOrderPrice} />}
-          {currentView === 'profile' && <Profile user={user} onUpdateUser={(updated) => { setUser(updated); addActivity('Profile sync completed', 'inventory'); }} />}
+          {currentView === 'profile' && <Profile user={user} onUpdateUser={(updated) => { setUser(updated); addActivity('Store profile updated', 'inventory'); }} />}
         </div>
       </main>
     </div>

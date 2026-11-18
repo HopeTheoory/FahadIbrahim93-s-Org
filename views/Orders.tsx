@@ -17,6 +17,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, onUpdateStatus, onUpdatePrice }
   const [isExporting, setIsExporting] = useState(false);
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [priceBuffer, setPriceBuffer] = useState<string>('');
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const filteredOrders = filter === 'All' ? orders : orders.filter(o => o.status === filter);
 
@@ -33,11 +34,68 @@ const Orders: React.FC<OrdersProps> = ({ orders, onUpdateStatus, onUpdatePrice }
     setEditingPriceId(null);
   };
 
+  const escapeCsvValue = (value: string | number): string => {
+    const str = String(value);
+    if (/[",\r\n]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const handleDownloadReport = () => {
+    if (filteredOrders.length === 0) return;
+
+    const headers = [
+      'Order ID',
+      'Date',
+      'Platform',
+      'Customer Name',
+      'Product Name',
+      'Quantity',
+      'Unit Cost (BDT)',
+      'Total Cost (BDT)',
+      'Total Revenue (BDT)',
+      'Net Profit (BDT)',
+      'Status',
+    ];
+
+    const rows = filteredOrders.map(order => {
+      const totalCost = order.buyingCost * order.quantity;
+      const netProfit = order.totalPrice - totalCost;
+      return [
+        order.id,
+        order.date,
+        order.platform,
+        order.customerName,
+        order.productName,
+        order.quantity,
+        order.buyingCost,
+        totalCost,
+        order.totalPrice,
+        netProfit,
+        order.status,
+      ].map(escapeCsvValue).join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.map(escapeCsvValue).join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateStamp = new Date().toISOString().split('T')[0];
+    link.href = url;
+    link.setAttribute('download', `ShopEase_Orders_Report_${filter}_${dateStamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadPDF = async () => {
     const element = document.getElementById('invoice-printable');
     if (!element || !showInvoice) return;
 
     setIsExporting(true);
+    setPdfError(null);
     try {
       await new Promise(resolve => setTimeout(resolve, 100));
       const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff' });
@@ -50,7 +108,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, onUpdateStatus, onUpdatePrice }
       pdf.save(`ShopEase_Invoice_${showInvoice.id}.pdf`);
     } catch (error) {
       console.error("Failed to generate PDF:", error);
-      alert("Something went wrong while generating the PDF.");
+      setPdfError("Something went wrong while generating the PDF.");
     } finally {
       setIsExporting(false);
     }
@@ -58,22 +116,39 @@ const Orders: React.FC<OrdersProps> = ({ orders, onUpdateStatus, onUpdatePrice }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {pdfError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center justify-between text-red-700">
+          <span className="text-sm font-bold">{pdfError}</span>
+          <button onClick={() => setPdfError(null)} className="p-1 hover:bg-red-100 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h2 className="text-3xl font-extrabold text-gray-900">Orders Inbox</h2>
           <p className="text-gray-500">Track and fulfill orders. You can adjust the final price for specific customers below.</p>
         </div>
-        <div className="flex items-center space-x-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
-           <Filter className="w-5 h-5 ml-3 text-gray-400" />
-           {(['All', OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.SHIPPED] as const).map(f => (
-             <button 
-               key={f}
-               onClick={() => setFilter(f)}
-               className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === f ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
-             >
-               {f}
-             </button>
-           ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center space-x-2 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+             <Filter className="w-5 h-5 ml-3 text-gray-400" />
+             {(['All', OrderStatus.PENDING, OrderStatus.PAID, OrderStatus.SHIPPED] as const).map(f => (
+               <button 
+                 key={f}
+                 onClick={() => setFilter(f)}
+                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap shrink-0 ${filter === f ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
+               >
+                 {f}
+               </button>
+             ))}
+          </div>
+          <button
+            type="button"
+            onClick={handleDownloadReport}
+            disabled={filteredOrders.length === 0}
+            className="flex items-center gap-2 px-5 py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-sm font-bold shadow-sm transition-all whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+          >
+            <Download className="w-4 h-4" />
+            Download Report
+          </button>
         </div>
       </div>
 

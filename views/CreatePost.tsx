@@ -20,10 +20,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostSuccess, shopName }) => {
   const [previewPlatform, setPreviewPlatform] = useState<'fb' | 'ig' | 'tt'>('fb');
   const [studioPrompt, setStudioPrompt] = useState('');
   const [showStudio, setShowStudio] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setErrorMsg(null);
       const reader = new FileReader();
       reader.onloadend = () => setImage(reader.result as string);
       reader.readAsDataURL(file);
@@ -33,27 +35,35 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostSuccess, shopName }) => {
   const handleAiImageGen = async () => {
     if (!studioPrompt.trim()) return;
     setIsGeneratingImage(true);
-    const generated = await generateProductPhoto(studioPrompt);
-    if (generated) {
-      setImage(generated);
+    setErrorMsg(null);
+    try {
+      const generated = await generateProductPhoto(studioPrompt);
+      if (generated) {
+        setImage(generated);
+        setShowStudio(false);
+      } else {
+        setErrorMsg("Unable to generate that image. Try a simpler description or upload a photo directly.");
+      }
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "AI image generation is currently unavailable.");
       setShowStudio(false);
-    } else {
-      alert("AI was unable to generate that specific image. Try a simpler description!");
+    } finally {
+      setIsGeneratingImage(false);
     }
-    setIsGeneratingImage(false);
   };
 
   const handleSmartCaption = async () => {
     if (!image) {
-      alert("Add a photo first so AI can analyze the style!");
+      setErrorMsg("Add a photo first so AI can analyze the style!");
       return;
     }
     setIsGenerating(true);
+    setErrorMsg(null);
     try {
       const result = await generateSmartCaptions(shopName || "new items", image);
       setCaptions(result);
-    } catch (error) {
-      console.error("AI Generation Failed", error);
+    } catch (error: unknown) {
+      setErrorMsg(error instanceof Error ? error.message : "AI caption generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -62,15 +72,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostSuccess, shopName }) => {
   const handlePost = async () => {
     const active = Object.entries(platforms).filter(([_, v]) => v).map(([k]) => k);
     if (active.length === 0 || !image) {
-      alert('Missing requirements: Platform & Photo.');
+      setErrorMsg('Missing requirements: please select at least one platform and add a photo.');
       return;
     }
     setIsPublishing(true);
+    setErrorMsg(null);
     try {
       await socialBridge.publishToAll({ captions, image, platforms: active });
       onPostSuccess();
-    } catch (e: any) {
-      alert(e.message);
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error ? e.message : 'Failed to broadcast post.');
     } finally {
       setIsPublishing(false);
     }
@@ -93,11 +104,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostSuccess, shopName }) => {
                 </div>
                 <div>
                   <h2 className="text-4xl font-black tracking-tight">AI Product Studio</h2>
-                  <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Powered by Gemini 2.5 Flash</p>
+                  <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Lifestyle Photo Assistant</p>
                 </div>
               </div>
 
               <div className="space-y-8">
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+                  <span>AI photo generation requires a billing-enabled Gemini API key. You can upload any product photo directly in the Broadcaster and generate AI captions for free.</span>
+                </div>
                 <div className="space-y-3">
                    <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest ml-2">Product Description</label>
                    <textarea 
@@ -136,6 +151,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostSuccess, shopName }) => {
               <p className="text-slate-500 text-lg">One design, universal impact.</p>
             </div>
           </header>
+
+          {errorMsg && (
+            <div className="p-5 bg-red-50 border border-red-200 rounded-3xl flex items-center justify-between text-red-700">
+              <div className="flex items-center space-x-3">
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-bold">{errorMsg}</span>
+              </div>
+              <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-red-100 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="group relative aspect-square bg-white border-4 border-dashed border-slate-100 rounded-[48px] flex items-center justify-center overflow-hidden hover:border-blue-400 transition-all">
